@@ -1,25 +1,86 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template.rmd"
+output: html_document
 ---
+## Loading and preprocessing the data  
+load packages
+```{r load, results="hide"}
+library(readr)
+library(ggplot2)
+library(dplyr, warn.conflicts = FALSE)
+```
+read the data specifying the column types as numeric, Date, numeric
+```{r}
+data <- read_csv("./activity.csv", col_types = "nDn")
+```
+## What is mean total number of steps taken per day?  
+calculate the total number of steps per day and plot as a histogram  
+```{r histogram of total number of steps per day}
+stepsPerDay <- summarize(group_by(data, date), total = sum(steps, na.rm=TRUE))
+qplot(stepsPerDay$total, data = stepsPerDay, binwidth = 1000, xlab = "Total number of steps per day")
+```  
 
+calculated the mean and median number of steps per day and plot  
+```{r mean and median number of steps per day}
+meanAndMedian <- summarize(group_by(data, date), 
+                           mean = mean(steps, na.rm=TRUE), 
+                           median = median(steps, na.rm=TRUE))
+ggplot(meanAndMedian, aes(date)) + 
+    geom_line(aes(y = mean, colour = "mean")) + 
+    geom_line(aes(y = median, colour = "median"))
+```
 
-## Loading and preprocessing the data
+Something looks wrong here as the median is 0 for all days and we got warnings for missing values  
 
+## What is the average daily activity pattern?  
+Plot the average steps by interval  
+```{r Plot the average steps by interval}
+meanByInterval <- summarize(group_by(data, interval), 
+                           mean = mean(steps, na.rm=TRUE))
+ggplot(meanByInterval, aes(interval)) + 
+    geom_line(aes(y = mean, colour = "Average steps"))
+```  
 
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
+08:35 has the highest average number of steps  
+```{r 08:35 has the highest average number of steps}
+meanByInterval[which(meanByInterval$mean == max(meanByInterval$mean)),]
+```
 ## Imputing missing values
+there are 2304 missing values in the steps column  
+```{r there are 2304 missing values in the steps column}
+summary(data)
+```  
 
+Now let's try to fill in missing values with the average step for that internval  
+```{r fill in missing values with average step for that internval}
+inputed.data <- left_join(data, meanByInterval, by = "interval")
+inputed.data$steps[is.na(inputed.data$steps)] <- inputed.data$mean[is.na(inputed.data$steps)]
+```  
 
+Now plot the histogram of total number of steps taken each day  
+```{r histogram of total number of steps taken each day}
+stepsPerDay <- summarize(group_by(inputed.data, date), total = sum(steps, na.rm=TRUE))
+qplot(stepsPerDay$total, data = stepsPerDay, binwidth = 1000, xlab = "Total number of steps per day")
+```  
 
-## Are there differences in activity patterns between weekdays and weekends?
+We see after imputation, that we don't have as many days with 0 steps. Now let's look at the mean and median steps per day with imputed data  
+```{r mean and median number of steps per day with imputed data}
+meanAndMedian <- summarize(group_by(inputed.data, date), 
+                           mean = mean(steps, na.rm=TRUE), 
+                           median = median(steps, na.rm=TRUE))
+ggplot(meanAndMedian, aes(date)) + 
+    geom_line(aes(y = mean, colour = "mean")) + 
+    geom_line(aes(y = median, colour = "median"))
+```  
+
+After imputation, the graph no longer has breaks, but there are still many days with 0 median  
+
+## Are there differences in activity patterns between weekdays and weekends?  
+Let's create a column called group and use that find the average number of steps taken broken out weekday or weekend  
+```{r average number of steps taken broken out weekday or weekend}
+inputed.data$day <- weekdays(inputed.data$date)
+inputed.data$group <- ifelse(inputed.data$day %in% c("Saturday", "Sunday"), "Weekend","Weekday")
+meanByInterval <- summarize(group_by(inputed.data, interval, group), 
+                           mean = mean(steps, na.rm=TRUE))
+qplot(interval, mean, data = meanByInterval, facets = group~., geom = "line")
+```
